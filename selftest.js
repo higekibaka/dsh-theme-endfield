@@ -70,19 +70,29 @@ const CASES = [
     expect: /stray backtick/,
   },
   {
-    name: 'turn-status recoloured with an ineffective color: instead of a gradient',
-    /* The gradient stops are palette VARIABLES now, not literals, so this injection
-       matches var(--edge-status-*) rather than a hex. It previously named #6b5d00 /
-       #fff500 directly and went vacuous the moment the palette refactor landed —
-       which the "INJECTION DID NOT APPLY" guard below caught, and is precisely why
-       that guard exists. \s* spans CRLF as well as LF, so these stay valid on
-       either checkout. */
-    mutate: (s) => s
-      .replace(/background-image:\s*linear-gradient\(90deg,\s*var\(--edge-status-light\)[^;]*;/,
-        'color: var(--edge-status-light) !important;')
-      .replace(/background-image:\s*linear-gradient\(90deg,\s*var\(--edge-status-dark\)[^;]*;/,
-        'color: var(--edge-status-dark) !important;'),
-    expect: /no background-image gradient|cannot recolour/,
+    name: 'turn-status recoloured with a hard-coded literal instead of the measured palette stop',
+    /* DSH 0.2 moved this label to masked-sweep text whose only lever is the
+       --dsw-alias-label-deep-diving token pair, so the guard checks the override
+       layer's VALUES and no longer looks for a background-image rule. This injection
+       swaps the light value for the literal the theme's own measurements REJECTED
+       (#8f7c00 scores 4.21 on the dark surface and 3.38 on cream) — exactly the
+       mistake the guard has to catch. The pattern is written against the declaration
+       rather than with fixed indentation so it survives reformatting. */
+    mutate: (s) => s.replace(
+      /('--dsw-alias-label-deep-diving':\s*\{\s*light:\s*)'var\(--edge-status-light\)'/,
+      "$1'#8f7c00'"),
+    expect: /turn-status label is not retinted/,
+  },
+  {
+    name: 'the dead [class*=turnStatus] selector comes back',
+    /* A rule targeting the pre-0.2 class name cannot match on 0.2, so it reads like a
+       fix while doing nothing. The guard has to fail on it rather than accept the
+       presence of "a turn-status rule". */
+    mutate: (s) => s.replace(
+      '      /* ================= boot loading screen ================= */',
+      "      body [class*='turnStatus']:not([class*='turnStatusClock']) { color: red; }\n"
+      + '      /* ================= boot loading screen ================= */'),
+    expect: /dead \[class\*='turnStatus'\] selector/,
   },
   {
     name: '--edge-word used but never defined',

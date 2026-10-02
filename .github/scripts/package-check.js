@@ -18,6 +18,21 @@ const checked = []
 
 for (const [sub, target] of Object.entries(pkg.exports || {})) {
   const label = `exports["${sub}"] -> ${target}`
+  /* A wildcard subpath (`./locale/*.json`) deliberately has no literal file to stat:
+     its whole point is to expose every file in that directory, which DSH's plugin
+     metadata reader resolves by name (`<pkg>/locale/en.json`) to fill a plugin card.
+     Check the directory it fans out from instead of the pattern itself. */
+  if (target.includes('*')) {
+    const dir = path.dirname(path.join(ROOT, target))
+    const ext = path.extname(target)
+    if (fs.existsSync(dir) && fs.readdirSync(dir).some((name) => name.endsWith(ext))) {
+      checked.push({ label, ok: true })
+    } else {
+      checked.push({ label, ok: false })
+      problems.push(`exports["${sub}"] 的匹配目录 ${path.relative(ROOT, dir) || '.'} 里没有可匹配的文件`)
+    }
+    continue
+  }
   if (fs.existsSync(path.join(ROOT, target))) checked.push({ label, ok: true })
   else {
     checked.push({ label, ok: false })

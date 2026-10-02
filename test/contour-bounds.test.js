@@ -20,12 +20,16 @@ function harness(fullScan) {
     const CONTOUR_STEP=6, CONTOUR_LEVELS=20, CONTOUR_SPAN=1.45
     const CONTOUR_MIN_LEN=40, CONTOUR_MIN_RING_BOX=21
     const CONTOUR_KEEP_LEN=CONTOUR_MIN_LEN*1.35, CONTOUR_KEEP_RING=CONTOUR_MIN_RING_BOX*1.5
+    /* contourBuildCandidate() now takes the sampling step as an argument and floors
+       the bump radius at CONTOUR_MIN_BUMPSAMPLES samples — mirror that constant here,
+       and pass the shipped 6px step the way contourBuild() would. */
+    const CONTOUR_MIN_BUMPSAMPLES=4
     let contourField=null, contourGeom=null, contourPaths=[], contourSeed=1
     const contourEvaluate=()=>{}
     ${fullScan ? functions.replace('if (f.boundsReady &&', 'if (false && f.boundsReady &&') : functions}
     ({ prepare(w,h,seed) {
-       contourSeed=seed; const c=contourBuildCandidate(w,h,0)
-       contourField=c.field; contourGeom={w,h,cols:c.cols,rows:c.rows,step:6}
+       contourSeed=seed; const c=contourBuildCandidate(w,h,0,CONTOUR_STEP)
+       contourField=c.field; contourGeom={w,h,cols:c.cols,rows:c.rows,step:CONTOUR_STEP}
        return contourField
      }, run() { contourExtract(0); return contourPaths } })`
   return vm.runInNewContext(code)

@@ -75,10 +75,10 @@ const mk = (dark, wuling) => `<!doctype html><html><head><meta charset="utf-8"><
   .card{border:1px solid var(--dsw-alias-border-l2);padding:12px 14px;
         background:var(--dsw-alias-bg-layer-1);font:12px/1.6 monospace;
         color:var(--dsw-alias-label-secondary);margin-top:10px}
-  /* Upstream's gradient-text turn status, so the recolour is visible in the shot. */
-  .Md3f7G_turnStatus{background:linear-gradient(90deg,#101110 0%,#101110 40%,
-    #d3e2ff 50%,#101110 60%,#101110 100%);-webkit-text-fill-color:transparent;
-    background-clip:text;-webkit-background-clip:text;font-size:13px;font-weight:600}
+  /* Upstream's turn-status label on the DSH 0.2 shape (masked-sweep text reading the
+     --dsw-alias-label-deep-diving* tokens), so the recolour is visible in the shot. */
+  .xz4KEq_running{--dsw-alias-label-shimmer:var(--dsw-alias-label-deep-diving-shimmer);
+    color:var(--dsw-alias-label-deep-diving);font-size:13px;font-weight:600}
   .x_newSession{display:block;width:100%;padding:8px 10px;margin-bottom:12px;
     font:600 12px Arial;border:1px solid var(--dsw-alias-border-l2);cursor:pointer}
   /* Header chip label. The theme styles it via
@@ -120,7 +120,7 @@ const mk = (dark, wuling) => `<!doctype html><html><head><meta charset="utf-8"><
         <div class="wSkVaW_titleRow">
           <div class="wSkVaW_titleCluster">
             <div class="wSkVaW_headerActions"><div><span class="x_label"><svg class="x_labelIcon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="12" r="2"/></svg>cordis</span></div></div>
-            <span class="Md3f7G_turnStatus">Deep diving...</span>
+            <span class="xz4KEq_running">Deep diving...</span>
           </div>
         </div>
       </div>

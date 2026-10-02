@@ -12,7 +12,11 @@ function grab(name) {
   }
   throw Error('Unbalanced kernel '+name)
 }
-const names=['contourRng','contourBuild','contourBuildCandidate','contourCoverageScore',
+/* The kernel list must track client.js: `contourStepFor` joined it when the grid
+   gained a cell cap (contourBuild reads it), and the constants it and the kernel
+   close over live in src/contour-worker.js because this script only extracts
+   FUNCTIONS — a missing one is a ReferenceError inside the worker at runtime. */
+const names=['contourRng','contourStepFor','contourBuild','contourBuildCandidate','contourCoverageScore',
   'contourEvaluate','contourExtractLevel','contourExtract','contourDrawLines']
 let worker=fs.readFileSync(path.join(root,'src/contour-worker.js'),'utf8')
 worker=worker.replace('/* CONTOUR_KERNEL */',names.map(grab).join('\n'))

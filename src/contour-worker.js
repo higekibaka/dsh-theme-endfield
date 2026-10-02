@@ -4,6 +4,13 @@ const CONTOUR_STEP = 6, CONTOUR_LEVELS = 20, CONTOUR_SPAN = 1.45
 const CONTOUR_MIN_LEN = 40, CONTOUR_MIN_RING_BOX = 21
 const CONTOUR_KEEP_LEN = CONTOUR_MIN_LEN * 1.35, CONTOUR_KEEP_RING = CONTOUR_MIN_RING_BOX * 1.5
 const CONTOUR_MIN_CROSSINGS = 3
+/* The kernel's own constants. The build script extracts FUNCTIONS only, so anything
+   contourBuild / contourBuildCandidate / contourDrawLines close over has to be mirrored
+   here by hand: the grid cap and the bump-radius floor, plus the Chaikin pass budget
+   `smoothPath` reads. A missing name is a ReferenceError inside the worker. */
+const CONTOUR_MAX_CELLS = 60000, CONTOUR_MIN_BUMPSAMPLES = 4
+const CONTOUR_SMOOTH_FULL = 8000, CONTOUR_SMOOTH_LIMIT = 20000
+const CONTOUR_MIN_INK = 80
 let contourSeed = 1, contourField = null, contourGeom = null, contourPaths = []
 let contourLineCv = null, canvas = null, painter = null, stroke = 'rgba(0,0,0,0)', rasterizer = null
 const contourStroke = () => stroke

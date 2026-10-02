@@ -49,7 +49,7 @@
 
 关键差异，逐条都有对应的防护：
 
-- **只有 `.volatile()` 字段可编辑。** `ctx.settings` 只把 volatile 路径投影成表单，写非 volatile 路径会直接报 `Config field "x" is not volatile`；整份 schema 一个 volatile 字段都没有时该条目**根本不出现**在设置里。所以 `index.js` 的 `Config` 16 个字段全部 `.volatile()`，`test/settings-config-forms.test.js` 会逐字段断言这一点（漏一个就是「设置保存不了」的现代写法）。
+- **只有 `.volatile()` 字段可编辑。** `ctx.settings` 只把 volatile 路径投影成表单，写非 volatile 路径会直接报 `Config field "x" is not volatile`；整份 schema 一个 volatile 字段都没有时该条目**根本不出现**在设置里。所以 `index.js` 的 `Config` **27 个字段全部 `.volatile()`**，`test/settings-config-forms.test.js` 会逐字段断言这一点（漏一个就是「设置保存不了」的现代写法）。
 - **两个 schemastery 必须区分。** DSH 同时装了带 `.volatile()` 的 `@deepseek-ai/schemastery`（3.18.4）和不带它的旧 `schemastery`（3.18.0）。`index.js` 的 `loadSchemastery(true)` 会逐个候选检查 `.volatile` 是否真的存在，找不到就返回 `undefined`（本插件退化成无需配置，而不是挂一个假表单）。
 - **命名空间是 entry id，不是包名。** `theme-endfield` 这个串同时出现在 `cordis.patch.yml` 的 `id:`、`index.js` 的 `SETTINGS_ENTRY` 和 client 的 `PREFS_ENTRY`；三者由新测试交叉校验。client 另外会依次尝试 `include:` 前缀等几种安装别名，优先选真正被 Host served（`status:'ready'`）的那个拼写；一个都没 served 时先绑定首选拼写（表单只是共享镜像的懒视图，早绑定才能等到迟到的 section）。此后每次镜像重载都会让每个表单重新派生，`unavailable`→`ready` 的转变会把「另一个拼写被 served」通知过来，此时自动切过去；万一镜像只更新却不通知（表单快照存储丢弃等价快照），还有**有界 settle watch**（20 × 500ms）自己轮询兜底。两种情况下切换期间 held 的编辑都会补写到新拼写上。
 - **`settings.yaml` 已废弃。** DSH 启动时把已有的 `settings.yaml` 改名为 `settings.yaml.imported`，并只迁移 `LEGACY_SECTION_ENTRIES` 里那几段。旧的主题段落名 `dsh-theme-endfield` 不等于 entry id `theme-endfield`，因此**不在迁移之列**，需要用户在设置页重设一次；这是 DSH 侧的行为，不是本插件丢的。旧值仍留在 `settings.yaml.imported` 里可手工对照。
@@ -59,7 +59,7 @@
 
 1. **声明**（Host `index.js`）：0.1.7-rc.1 导出 `Config`（`z.object({ 每个字段: z.string().default(...).volatile() })`）；同时用 `ctx.inject(['settings'], sctx => sctx.effect(() => sctx.settings.configure({ auto: false }, ctx.fiber)))` 关掉自动生成的设置页（本插件自带四组页面）。旧宿主则在 `settings.register` 存在时执行 `register('dsh-theme-endfield', schema, { applies:'live' })`。schema 每个字段都是**字符串**字段并带 `.default(...)`：default-ON 存 `'1'`（读作 `!== '0'`），default-OFF 存 `'0'`（读作 `=== '1'`）；palette/radius/fps/speed 各存一个文档里写明的字面量。字符串化让三代存盘点位的值模型完全一致，client 的键表、面板与测试都不必随 transport 改动。
 2. **写**（浏览器 `client.js`）：设置面板每个 toggle 调用内部 `prefsSet(field, value)` → 只有当快照是 **durably served**（`mode:'host' && status:'ready' && writable`）时才调用 transport 的 `set(field, value)`，Host 收到后原子写盘。只凭 `writable` 判写是一个坑：host 模式的快照即便本命名空间**尚未被 served** 也会返回 `writable:true` 与 `status:'unavailable'`（`commit radius = round … status= unavailable` 就是这么打出来的）——旧代码照写不误、清了脏标记但什么都没落盘，刷新即丢。现在这种写被**拦下并标脏**（页面内仍生效），等快照在后续 ready 回相（Host 文档提交、镜像重载）时由 subscription 自动补写；`configForms.set()` 明确返回 `false`（Host 拒绝/跳过）时同样重新标脏等待下次回相，而不是假装写成功。
-3. **读 / 生效**：transport 的 `getSnapshot().value` 就是已由 schema 校验并合并默认值的整段（client 再经 `prefsResolveSection()` 归一化到 16 个声明字段）；主题层的 `isEnabled()` 与其它 getter 每次调用都 `prefsGet(field)` 现读本段，天然随值变化。
+3. **读 / 生效**：transport 的 `getSnapshot().value` 就是已由 schema 校验并合并默认值的整段（client 再经 `prefsResolveSection()` 归一化到 27 个声明字段）；主题层的 `isEnabled()` 与其它 getter 每次调用都 `prefsGet(field)` 现读本段，天然随值变化。
 4. **订阅同步**：`form.subscribe(...)` / `scope.subscribe(...)` 在每次落盘/镜像变化时唤醒，client 再跑一遍 `reconcileFromPrefs()`，把主题开关（enabled → mount/unmount token+样式表）、圆角/配色 class、水印、等高线、雷霆大字重新对齐。这样同 profile 里**另一个窗口/设备**编辑落盘文件（或本轮写入被 Host 回相确认）都不需要刷新即可热生效。订阅返回的 disposer 现在会被保存并在 run 拆除时调用：`ConfigForm` 是 provider 拥有、跨插件共享的实例，漏掉它会把这一个监听器泄漏给同页面的下一次 run。
 5. **启动恢复**：`apply()` 早于 transport 就绪时，读 schema 默认值（内存镜像），一旦 `status:'ready'` 的第一个真值镜像到达就切换到持久值——即使 Desktop 在随机端口上启动，也能立刻恢复到上次的设置。
 
@@ -96,6 +96,20 @@ v1.1.4 之前的判据是「**必须**找到带 `.volatile()` 的 schemastery，
 
 - **判据写进自检报告**：新增 `schemaMode` 记录走了哪条路；`resolution` 每一行现在除 `resolved` / `error` 外还带 `loaded` / `loadError` / `volatile` / `marker`。「解析得到但加载失败」以前在报告里读起来像自相矛盾，现在是一行结论。
 - **不再有「默认跳过」的断言。** `settings-config-forms.test.js` 的 Host 侧断言在拿不到 schemastery 时**整段跳过**，而拿不到 schemastery 恰恰是它要守的那个场景——于是在唯一要紧的环境里它什么都没验。新的 `settings-config-fallback.test.js` 不依赖本机 schemastery：它把**显式 builder**（含「只有 `.extra()`」这一形状）交给 `buildSchemaWith()`，逐字段断言默认值与 `meta.volatile`，并断言选择顺序（native 优先、`.extra()` 兜底、两者皆无则不导出）。
+
+### DSH 0.2.0-rc.2 上失效的三处应用侧钩子（v1.1.6 已跟进）
+
+0.2 **没有再动 settings API**：`Config` + `ctx.configForms` 那套接缝与 0.1.7 完全一致（唯一新增的语义是 `set()` 用**布尔值**回答而不是 reject，client 的写账本两种都认），所以本插件的 Host/Client 两半都不需要改。0.2 换掉的是三个**应用侧**细节，而它们的共同点是**旧写法不报错、只静默失效**——所以三处都在真实 0.2.0-rc.2 页面上实测过（scratch profile + 真运行时 + CDP 探针）：
+
+| 钩子 | 0.1.x | 0.2 | 旧写法的后果（实测） |
+| --- | --- | --- | --- |
+| 回合状态标签 | `@deepseek-ai/dsh-client-ui-conversation` 的 `<hash>_turnStatus`，**渐变文字**（`background-image` + `background-clip:text`） | `@deepseek-ai/dsh-client-ui-chat` 的 `<hash>_running`，**遮罩扫光文字**，着色只认 `--dsw-alias-label-deep-diving` / `-shimmer` | 规则永不命中；该令牌仍是应用自带值 `color-mix(in srgb, #101110 70%, #172554)`，标签完全没有主题色 |
+| 右侧栏列 | `_detailsCol`，不透明底色在其内部 `*_root` 上 | `_rightbarCol`，不透明底色**在列元素本身** | 选择器与目标元素**同时**变了：右侧栏一打开就整块盖住等高线图层 |
+| `_heroGlow` | 0.1.2-rc.1 起已无该模块 | 0.2 仍无 | 规则保持 self-healing 空钩子，不改行为 |
+
+因此回合状态标签的换色**从 CSS 移到 `theme.overrideTokens` 层**：给 `--dsw-alias-label-deep-diving` / `-shimmer` 各写一对 light/dark 值，复用既有的 `--edge-status-*` 色标（对比度结论完全不变，见[§ 四类：回合状态标签](#四类回合状态标签)与 [design-language.md](design-language.md#为什么亮色模式的强调色要下沉)），并用 `var()` 引用让配色切换依旧零 JS 重绘。护栏同步跟上：`check.js` 的第 4 条改成检查这两个令牌的四个值、并**禁止** `[class*='turnStatus']` 复活（那会是一条永远匹配不到的「假修复」），`test/selector-guard.test.js` 同时钉住 `_rightbarCol` 与两个令牌名。
+
+插件卡片的展示文案在 0.2 由 `locale/<语言>.json` 的 `meta.title` / `meta.description` 提供（`dsh.client` 声明本身不变），本版补上 `locale/en.json` 与 `locale/zh.json`。`dsh.client.inject` 里那两个 0.2 已不存在的包名（`@deepseek-ai/dsh-client-runtime`、`@deepseek-ai/dsh-client-ui-slots`）换成了 0.2 真正的提供方（`dsh-client-ui-theme` / `-ui-renderer` / `-ui-settings` / `-locale` / `-api-session-controller`）。这里要分清两件事：`dsh.client.inject` 是**浏览器包预载列表**（只影响加载顺序，指向不存在的包会被静默跳过，所以旧列表在 0.2 上「没坏」但也不再表达任何意图），而 `theme` / `configForms` 这类**服务**依赖由 client bundle 自己的 `exports.inject` 声明——`theme` 从来不是包名，写在这里本来就是无效项。
 
 ### 存储字段名必须来自 schema，不能用「去掉前缀」推出来（issue #15）
 
@@ -215,7 +229,7 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
 
 ### 等高线：应用外框内部
 
-从应用自身 CSS 实测：**三个元素会用不透明的 `--dsw-alias-bg-base` 盖住任何 body 级图层**——应用外框、对话列、详情列。所以图层挂进外框内部，并在挂载期间把这几处底色置为透明（`:has()` 守卫使功能关闭时全部规则失效）。
+从应用自身 CSS 实测：**三个元素会用不透明的 `--dsw-alias-bg-base` 盖住任何 body 级图层**——应用外框、对话列、右侧栏列（0.1.x 叫详情列）。所以图层挂进外框内部，并在挂载期间把这几处底色置为透明（`:has()` 守卫使功能关闭时全部规则失效）。
 
 外框本身已是 `position: relative` 且**不产生层叠上下文**，因此 `inset:0; z-index:0` 的子元素正好落在「外框底色之上、所有定位子元素之下」。
 
@@ -264,7 +278,7 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
 
 2. **补一层长波起伏。** 高斯之和在岛屿之间**恰好衰减为零**，那里的场完全平坦、没有任何高度线穿过——首版渲染因此出现大片空白，暴露了构造痕迹。加入三道极缓的长波正弦后，间隙里仍有梯度可穿越，孤立的「靶心」才连成一整片地形。代价 1.70ms。
 
-3. **用二次曲线画线，而不是直线段。** marching squares 每个网格边至多产出一个顶点，10px 网格下折线**本身就是有棱角的**：实测线段平均 7.8px，顶点转角 p99 达 **41.7°**。`lineJoin` 救不了——1px 描边根本没有接合处可倒角。改成让每个原顶点当**控制点**、曲线穿过线段中点（C1 连续，数学上无折角），且不增加任何顶点：
+3. **用二次曲线画线，而不是直线段。** marching squares 每个网格边至多产出一个顶点，粗网格下折线**本身就是有棱角的**：实测线段平均 7.8px，顶点转角 p99 达 **41.7°**。`lineJoin` 救不了——1px 描边根本没有接合处可倒角。改成让每个原顶点当**控制点**、曲线穿过线段中点（C1 连续，数学上无折角），且不增加任何顶点：
 
    | 方案 | 转角 p99 | 顶点数 | 增加耗时 |
    | --- | --- | --- | --- |
@@ -273,8 +287,29 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
    | **二次曲线（当时采用）** | **不再有折线转角** | **5.5k（不变）** | **+0.15ms** |
 
    > **后续演进**：中点二次曲线在长边上仍留下可见的「圆角多边形」弯折。现行实现改为 **Chaikin ×3 预处理 + 约束 Catmull-Rom 三次曲线**——曲线穿过原顶点、相邻段共享切向（切向系数 0.32），手柄长度上限（0.62× 较短邻段）防止窄鞍部过冲；开放路径的两个端点保持固定（0.4 系数、0.55× 手柄上限）。平滑效果由平滑/尖点测试固定，本表保留为当时的实测记录。
+   >
+   > 上表的角度是在**当时的 10px 采样网格**上量的；现行 `CONTOUR_STEP` 是 **6**（网格加密后折线本身的转角更小，所以那张表是保守上界）。也正因为顶点数随面积平方增长，网格不能靠一味加密来解决棱角——见下一节。
 
 4. **缝合成连续折线。** 线段按边 ID 缝合后，数千条散段变成约 80 条连续折线，整片地形只需一次 `stroke()` 而非数千次 `moveTo`。
+
+### v1.1.6：短窗口不再缠绕，同步画布路径不再压满一帧
+
+两个独立缺陷，都是「看着像画风问题、实际是数值 / 复杂度问题」。前者影响**所有渲染路径**（它发生在场生成阶段），后者只影响**主线程 Canvas2D 回退路径**（worker + WebGL2 路径下绘制不在主线程，但同一段画线代码在 worker 里省下的分配与 GC 依然是净收益）。
+
+**一、短 / 窄窗口下场被采样混叠（缠绕堆叠）。** 高斯凸起半径写的是 `(0.05 + rnd() * 0.09) * min(w, h)`——把地形特征尺寸绑在**较短边**上。外框一矮（或一窄），凸起半径就缩到比 6px 采样步长还小，于是相邻格点直接跨过好几条等值线，marching squares 吐出一圈圈紧贴的同心环加发夹尖刺，看起来就是线缠在一起、叠成一堆。实测：1440×130 明显缠绕，1440×60 退化成括号状碎屑，1440×900 正常。修法是给半径一个**不小于 4 个采样格**的下限（`CONTOUR_MIN_BUMPSAMPLES`）；常规窗口的相对项本来就远大于该下限，所以画面逐像素不变。
+
+**二、同步画布路径的单帧成本。** 在主线程 Canvas2D 路径上实测（1440×900，每张图）：
+
+| 项 | 实测 | 处理 |
+| --- | --- | --- |
+| `closePath()` | 18 次 / 张，均值 **0.278ms**、最大 1.2ms，约占一帧的 **16%** | 它把当前子路径拼进已累积的 path，成本随 path 里已有内容增长；改成**先画环、再画开放折线**，让每次拼接只面对环几何 |
+| 每帧贝塞尔段 | **37,865** 条（来自约 4.7k 抽取顶点，Chaikin ×3 把点数变成 8 倍） | 按抽取顶点数自适应 Chaikin 次数：≤8000 维持原本 3 次，>8000 降到 2 次、>20000 降到 1 次 |
+| `tangent()` | 每段 8 个 `[x, y]` 数组 + 最多 6 次 `Math.hypot`，剖析器显示该项独占全页 CPU **14%** | 改成标量切向 + 扁平数组 + `Math.sqrt`（参数都是像素差，远离 `hypot` 的溢出区间），几何保持逐字节等价 |
+| `smoothPath()` | 每个源顶点约 14 个小数组（3 次 pass × 每点 2 个） | 全程扁平 scratch 数组 |
+
+另外加了两道护栏：**格子数上限**（`CONTOUR_MAX_CELLS = 60000`，超出时按 `contourStepFor()` 加大步长；1440×900 是 36k 格，仍用 6px，普通窗口完全不变）把「一张图的成本」从随面积平方增长压成近似常数，同时让大 HiDPI 画布继续留在 worker 的显存上限之内；**占空比上限**（`CONTOUR_DUTY = 0.5`）只在同步画布路径生效——worker 绘制时一次刷新远低于 1ms，这个钳制永不生效；一旦回退到主线程且单帧超预算，就按「本次实测成本 / 0.5」拉长间隔，把线程还回去。相位仍然每次**只前进一个标称帧**（绝不按墙上时钟的间隔追赶），所以机器再忙看到的也是同一段动画放慢，而不是卡顿后跳一下。
+
+> 判定口径要写清楚：worker 路径下**不存在**「页面被绘制卡死」这一症状（抽取与绘制都在 worker 里）；上面那半张表量的是主线程 Canvas2D 路径，而 worker 拒绝超过 8M 显存像素的画布、或在 worker 不可用时，这条路径就是**实际在跑**的那条（`test/contour-loop-reentry.test.js` 专门覆盖这个回退态）。两条路径共用同一份 `contourDrawLines`，所以省下的分配在 worker 里同样成立。
 
 ### 平滑只管中段：三处真正的锐角（issue #3）
 
@@ -326,6 +361,22 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
 - **接受-或-重抽校验**：分层修不了真正的机制——线只出现在场**穿越** 21 条固定高度之处，局部平坦且卡在两条高度之间的区域，凸起排得再匀也是空白。而若强行加大倾斜以保证每格必有穿越，需要横跨全宽约 9.5 条平行线，那读作条纹不是地形。所以改为按测试所用的同一不变量校验候选布局，不合格就换 salt 重抽（每次仅一次粗网格场求值，不提取不绘制）。
 
 校验门槛也是实测定的：只要求「至少 1 次穿越」时仍有 4 个空白格漏过，且**每个都含已绘制顶点**——高度只擦过格子一角，产出 0.16%~0.44% 墨迹，几何上成立、视觉上空白。故要求每格至少扫过 **3** 条高度带。
+
+**但「几次穿越」并不等于「有多少墨」**（v1.1.6 补上的一环）。3 条高度带可以全部只擦过同一格的同一个角，格子照样几乎空白——这正是 CI 上 `contour-specks` 偶发飘红的原因：最薄的那批合格布局在 CI 的栅格化下量到 **0.47%**，低于 0.6% 的判据，而校验器认为它们合格。三处证据把这条缝隙钉死了：
+
+- 判据本身没问题：把采样步长从 2px 改成 1px、把 alpha 阈值从 >10 放宽到 >0，同一格只涨到 1.25 倍（**c1≈c2**），说明不是采样混叠也不是阈值把墨算丢了，格子是**真的薄**；
+- 提高穿越次数不是出路：要求每格 ≥**4** 条高度带时，32 次重抽有 **39%** 的加载触顶、只能落回兜底布局（正是重抽机制要避免的那种失败）；
+- 提高「墨」才是出路，而且很便宜。
+
+所以校验器现在**同时**给每格算一个廉价的墨量代理：遍历该区域的场四边形，数每个四边形的四角值域里落进了多少条被绘制的高度带。一次这样的命中就意味着等值线穿过该四边形，约等于 `step` 像素的描边——不必跑 marching squares、也不必在构建期做提取。在 1406×756 与 1440×757 两个视口、各 400 个随机布局上对着**真实提取出的每格描边长度**标定：
+
+| 墨量代理 | 最薄区域的真实描边长度 |
+| --- | --- |
+| 47–52（加门槛前的最差） | **182–201px** |
+| 80（现行门槛） | **~310px** |
+| 92（中位布局） | ~437px |
+
+于是 `CONTOUR_MIN_INK = 80` 把「最薄区域」的保证从 ~182px 抬到 ~310px，代价是平均重抽次数 3.97 → 5.71、p95 15、最差 19（上限 32，200 个种子**从未触顶**）。实测效果：40 次加载里最薄的格子从 **1.02%** 抬到 **1.61%**，对 0.6% 判据的余量由约 1.7 倍变成 **2.7 倍**，CI 上那次 0.47% 的病态布局不再可能出现。
 
 去掉分层只留校验：实测 8 次加载有 4 次耗尽 12 次重抽上限并落回兜底布局。分层让「一次过」成为常态（平均 2.5 个候选，最多 6，从未触顶），校验把它变成保证。一次性构建耗时 18.7ms，且只发生在挂载 / resize，动画稳态仍有 76% 余量。
 
@@ -455,7 +506,7 @@ background: var(--dsw-alias-interactive-bg-hover-solid);   /* :hover */
 
 1. **禁止把模块哈希写进选择器。** CSS Module 类名是 `<hash>_<语义后缀>`，每次上游重新构建哈希全变，钉哈希的选择器**静默失效**。`test/selector-guard.test.js` 会在哈希重新出现时报警。
 2. **复合状态用子串匹配，不用 `[class$=]`。** 属性后缀选择器要求**整个 class 属性**以该串结尾，而元素常常还带第二个类（实测 `[class$='_inspectButton']` 在 `class="gNWCoW_inspectButton HOVERPROBE"` 上直接漏掉）。`[class*='_语义名']` 对拼接免疫；`_unselected` 因下划线断词不会误中 `_selected`。
-3. **泛化后缀必须加作用域。** 轨迹与工作区也有 `*_arrow` 类但**没有 hover 填充**，裸匹配会给它们强行刷墨色（暗色下黑-on-黑）。附件箭头按输入区容器（`_composerSeat`/`_composerHero`）限定；同理清等高线背景必须用 `_centerCol`/`_detailsCol` 限定 `_root`——当前构建 27 个 `*_root` 里有 6 个带不透明底。
+3. **泛化后缀必须加作用域，而且 0.2 连「作用域本身」也会改名。** 轨迹与工作区也有 `*_arrow` 类但**没有 hover 填充**，裸匹配会给它们强行刷墨色（暗色下黑-on-黑）。附件箭头按输入区容器（`_composerSeat`/`_composerHero`）限定；同理清等高线背景必须用列后缀限定 `_root`——0.1.x 是 `_centerCol`/`_detailsCol`，0.2 右侧栏改成 `_rightbarCol` 且不透明底色搬到了列元素本身，所以限定词与目标元素要**同时**更新（见[§ DSH 0.2.0-rc.2 上失效的三处应用侧钩子](#dsh-020-rc2-上失效的三处应用侧钩子v116-已跟进)）。这类改名不会报错，只会让规则静默不命中。
 4. **子树位置不是语义，不要用 `>` 把中间层数写死。** 语义后缀能扛住重新哈希，却扛不住上游**插入一层包裹元素**：`A > B` 在 `A > C > B` 上直接失配，同样静默。这条 bug 在一次会话里被犯了**两次**（见七类）：先是把徽章当成 header 的直系子节点，改成 `_headerActions >` 之后又漏掉了**插槽自己那层没有 class 的包裹 div**。层级要么用后代组合器表达，要么更好——**改用元素自身的特征**把目标锁定（不依赖任何一层的位置）。新增或调整这类选择器时，必须对着**真实 DOM**（浏览器里量出来，或从上游渲染代码读出来）验一遍，而不是对着测试夹具。
 
 ### 二类：前景与背景被映射成同一个值
@@ -494,10 +545,12 @@ background: var(--dsw-alias-interactive-bg-hover-solid);   /* :hover */
 
 ### 四类：回合状态标签
 
-该标签（`Md3f7G_turnStatus`）是**渐变文字**而非普通着色文字：上游画了一层 `linear-gradient` 背景，再用 `-webkit-text-fill-color: transparent` + `background-clip: text` 把字「镂空」，并以 `background-position` 做流光动画。由此两个结论：
+该标签在 **0.1.x** 上是 `Md3f7G_turnStatus`，是**渐变文字**而非普通着色文字：上游画了一层 `linear-gradient` 背景，再用 `-webkit-text-fill-color: transparent` + `background-clip: text` 把字「镂空」，并以 `background-position` 做流光动画。由此两个结论：
 
 1. **写 `color:` 完全无效**——透明文字填充优先，字仍由渐变决定；改色必须改渐变本身。
-2. **不能去动 `--dsw-static-deepseek-500/200` 这两个共享令牌。** 它们同时支撑 `--dsw-alias-button-info-fill`、`--dsw-alias-state-business-primary` 与 `--dsw-specific-bubble-highlight`，本主题刻意把它们映射成墨 / 纸色。因此只覆盖 `background-image`，上游的 `background-size`、`background-position` 与流光动画保持不变。
+2. **不能去动 `--dsw-static-deepseek-500/200` 这两个共享令牌。** 它们同时支撑 `--dsw-alias-button-info-fill`、`--dsw-alias-state-business-primary` 与 `--dsw-specific-bubble-highlight`，本主题刻意把它们映射成墨 / 纸色。因此当时只覆盖 `background-image`，上游的 `background-size`、`background-position` 与流光动画保持不变。
+
+**0.2 换掉了整套机制**（v1.1.6 已跟进，实测见[§ DSH 0.2.0-rc.2 上失效的三处应用侧钩子](#dsh-020-rc2-上失效的三处应用侧钩子v116-已跟进)）：标签搬到 `@deepseek-ai/dsh-client-ui-chat` 并改叫 `<hash>_running`，是**遮罩扫光文字**——渐变、`background-clip` 都不存在了，上面两条结论随之失效：写 `background-image` 没有任何作用，改色只能落到 `--dsw-alias-label-deep-diving` 与 `-shimmer` 这两个令牌上。本主题因此把换色移进 `theme.overrideTokens` 层，值仍复用同一批 `--edge-status-*` 色标，两代共享同一份对比度结论。
 
 色标取法见 [design-language.md](design-language.md#为什么亮色模式的强调色要下沉)。
 

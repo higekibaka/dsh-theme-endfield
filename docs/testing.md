@@ -30,7 +30,7 @@ npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / �
 | 没有任何 `--edge-*` 变量在 `:root` 里引用 `--dsw-*` 令牌 | 结构化检查，守 [:root 陷阱](engineering-notes.md#变量必须声明在-body-而不是-root) |
 | 样式表里没有 `--dsw-font-family:` / `--ds-font-family-code:` 声明 | 这两个令牌是**应用的公共接口**（应用用它渲染 UI 根字体），主题声明它就会连第三方挂件的字体一起改掉，见[字体令牌](engineering-notes.md#字体令牌是应用的公共接口不是主题的开关) |
 | `client.js` 能编译 | 用 `vm.Script` 在进程内解析、不执行 |
-| 回合状态标签仍通过 `background-image` 改色 | 写成 `color:` 对渐变文字无效，属于「改了但没生效」的静默失败 |
+| 回合状态标签仍通过 0.2 的两个 `--dsw-alias-label-deep-diving*` 令牌改色（且没有残留 `[class*='turnStatus']`） | 0.2 把该标签改成遮罩扫光文字，唯一能改色的途径就是那两个令牌；留着按类名匹配的旧规则会「改了但没生效」 |
 
 ## selftest.js — 校验器自检
 
@@ -76,9 +76,9 @@ node test/hover-check.js             # 用 CDP 真的移动鼠标，验证真实
 node test/verify-shots.js            # 解码四张截图统计强调色像素
 ```
 
-**`palette-contrast.test.js`** 从 `client.js` 的实际样式表里把变量读出来再验算。覆盖 27 项：实心底 + 墨色字达 AA、悬停底同样达标、渐变文字四个色标对**两种**可能底色都达 AA、暗色强调色作图标墨色 ≥3、两配色的等高线合成对比度相差 ≤20% 且高于 1.06 感知下限、hero 光晕不比原品牌蓝更响、两配色确实不同、强调色写成 6 位十六进制，以及**武陵青的亮度必须落在 45%–56% 区间且留在青碧色轴上**。
+**`palette-contrast.test.js`** 从 `client.js` 的实际样式表里把变量读出来再验算。覆盖 27 项：实心底 + 墨色字达 AA、悬停底同样达标、回合状态四个色标对**两种**可能底色都达 AA、暗色强调色作图标墨色 ≥3、两配色的等高线合成对比度相差 ≤20% 且高于 1.06 感知下限、hero 光晕不比原品牌蓝更响（该 `*_heroGlow` 模块在 0.2 已不存在，规则保留为自愈钩子）、两配色确实不同、强调色写成 6 位十六进制，以及**武陵青的亮度必须落在 45%–56% 区间且留在青碧色轴上**。
 
-**`palette-switch.test.js`** 在真实浏览器里跑真实 `client.js`，并**按应用的真实方式把令牌写成 `<body>` 行内样式**——用样式表 `:root` 假装会让测试通过而线上坏掉，这种不对称正是它存在的理由。断言：默认是谷地黄且不带 class；11 个变量全部**非空**；`--dsw-alias-brand-primary` 在切换后**自动**变成青色（令牌层没有重新注册）；`rgba(var(--rgb), α)` 型半透明色块随之切换；渐变文字换色；**画布被重绘且新描边偏青**（B 通道高于 R）；关闭主题后不残留 class。
+**`palette-switch.test.js`** 在真实浏览器里跑真实 `client.js`，并**按应用的真实方式把令牌写成 `<body>` 行内样式**——用样式表 `:root` 假装会让测试通过而线上坏掉，这种不对称正是它存在的理由。断言：默认是谷地黄且不带 class；11 个变量全部**非空**；`--dsw-alias-brand-primary` 在切换后**自动**变成青色（令牌层没有重新注册）；`rgba(var(--rgb), α)` 型半透明色块随之切换；**回合状态文字换色**（0.2 的 `<hash>_running` 读 `--dsw-alias-label-deep-diving`，页面按 0.2 的真实 CSS 造形，量的是真实机制而不是 0.1.x 的渐变文本）；**画布被重绘且新描边偏青**（B 通道高于 R）；关闭主题后不残留 class。
 
 **`settings-buttons.test.js`** 读计算样式，用同特异度的 `.HOVERPROBE` 类替代 `:hover`。这是合理的层叠等价，但反向对照暴露了它的边界（见[验证方法论](engineering-notes.md#计算样式触发不了-hover)），因此有了下一个脚本。
 
@@ -121,7 +121,7 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 
 > **「设置刷新后复位」的排查顺序。** 这条症状有两个完全不同的成因，先分清再动手：
 >
-> 1. **Host 半没导出 `Config`** —— 用 `cordis_inspect` 的 host `Config.listConfigs`（或 `dsh` 的插件面板）看该 entry 的状态：`absent` 就是没有 Config，`schema` 才是正常。此时 DSH 根本不投影表单，client 只能停在 session-local。成因见[工程笔记](engineering-notes.md#加载期解析-schemasterydev-link-安装必须显式去找v111-起加固v112-加自检报告)：dev-link 安装下 `require('@deepseek-ai/schemastery')` 必然失败，要靠 `resolutionRoots()` 显式找回。**注意「找不到」有两种，修法不同**：候选根全都解析不到（报告里是 `error: MODULE_NOT_FOUND`），与「解析得到、require 却抛错」（报告里是 `loadError`，v1.1.5 起才有这个字段）——后者本机就是如此：唯一带 `.volatile()` 的 3.18.4 解析得到但加载失败，而能加载的两个副本都没有 `.volatile()`。自 v1.1.5 起，只要还有一个能设 `meta.volatile` 的 builder（哪怕没有 `.volatile()`，靠 `.extra('volatile', true)` 合成）就照样投影表单，见[找不到 .volatile() 也必须能存](engineering-notes.md#找不到-volatile-也必须能存v115)。
+> 1. **Host 半没导出 `Config`** —— 用 `cordis_inspect` 的 host `Config.listConfigs`（或 `dsh` 的插件面板）看该 entry 的状态：`absent` 就是没有 Config，`schema` 才是正常。此时 DSH 根本不投影表单，client 只能停在 session-local。成因见[工程笔记](engineering-notes.md#加载期解析-schemasterydev-link-安装必须显式去找v111-起加固v112-加自检报告v1113-改为结构化扫描)：dev-link 安装下 `require('@deepseek-ai/schemastery')` 必然失败，要靠 `resolutionRoots()` 显式找回。**注意「找不到」有两种，修法不同**：候选根全都解析不到（报告里是 `error: MODULE_NOT_FOUND`），与「解析得到、require 却抛错」（报告里是 `loadError`，v1.1.5 起才有这个字段）——后者本机就是如此：唯一带 `.volatile()` 的 3.18.4 解析得到但加载失败，而能加载的两个副本都没有 `.volatile()`。自 v1.1.5 起，只要还有一个能设 `meta.volatile` 的 builder（哪怕没有 `.volatile()`，靠 `.extra('volatile', true)` 合成）就照样投影表单，见[找不到 .volatile() 也必须能存](engineering-notes.md#找不到-volatile-也必须能存v115)。
 > 2. **Host 侧代码太旧**（进程里跑的还是上一次启动时 import 的模块）。**浏览器刷新只重载 `client.js`**；`index.js` 的改动必须**整进程重启 DSH** 才生效，`dsh-hmr` 不观察 `**/node_modules`。
 >
 > 一个能直接分辨两者的判据：构建不出 `Config` 时，`index.js` 会往 profile 目录写 `theme-endfield-diagnostic.json`（成功则自动删除）。**该文件存在**说明进程里的代码已经是新的、且**连一个能设 volatile 标记的 builder 都没拿到**（文件里有每个候选根的 `require.resolve` / `require` 结果、`schemaMode` 与 `loaderStartedAt`）；**该文件不存在而状态仍是 `absent`** 说明进程里跑的还是旧模块——重启，而不是改代码。
@@ -199,6 +199,8 @@ node test/contour-cusps.test.js       # 逐帧尖点 / 锐角（issue #3）
 node test/contour-a11y.test.js        # prefers-reduced-motion 行为
 node test/contour-coverage.test.js    # 8×5 分区墨迹覆盖率
 node test/contour-perf.test.js        # 稳态帧成本（n=80）
+node test/contour-bounds.test.js      # 扫描边界与全扫的逐坐标等价
+node test/contour-worker.test.js      # worker 内核与主线程一致
 node test/shoot.js                    # 输出亮/暗 × 两配色共四张截图供肉眼复核
 ```
 
@@ -222,7 +224,9 @@ node test/shoot.js                    # 输出亮/暗 × 两配色共四张截�
 
 **`contour-perf.test.js`** 不走 `requestAnimationFrame`——headless 会挂起 / 合并 rAF，只能采到 n=1，而没有分布支撑的数字不算测量。它按函数名把算法源码从 `client.js` 里原样切出后在紧循环里计时，并丢弃前两次采样（冷启动含 JIT 预热）。
 
-实测稳态：p95 8.6ms / 41.7ms 预算，约 81% 余量。
+该脚本对 24 / 60 / 120 fps **逐个**比预算，并在第一个超标处失败——所以真正卡住它的门槛是 **8.3ms（120fps）**，不是 41.7ms：报数时别只看「41.7ms 预算」那一行。
+
+> **提取到的名字必须跟着 `client.js` 走。** 这些「原样切出」的脚本按名字抓函数与常量，切出来少一个就是页面里的 `ReferenceError`，而它只会表现为 `no result` / 一行 `CONTOUR_... is not defined`。新增或重命名内核里的函数与常量时（例如 `contourStepFor`、`CONTOUR_MAX_CELLS`、`CONTOUR_MIN_BUMPSAMPLES`、`CONTOUR_SMOOTH_*`），要同步 `contour-smoothness` / `contour-cusps` / `contour-bounds` / `contour-perf` 的名单、`scripts/build-contour-worker.js` 的 `names`，以及 `src/contour-worker.js` 顶部手工镜像的常量——worker 里少一个常量同样是运行时 `ReferenceError`。
 
 ---
 

@@ -4,6 +4,20 @@
 
 奶油纸底、墨黑文字、信号黄/武陵青强调色、全直角工业编辑风。Client 侧（`client.js`）通过主题令牌和样式覆盖界面；Host 侧（`index.js`）负责设置持久化与可选的音频通知（派生系统播放器子进程），均不修改应用代码。
 
+## 版本支持
+
+| DSH | 设置持久化 | 备注 |
+| --- | --- | --- |
+| **0.2.x**（在 **0.2.0-rc.2** 上实测） | Host 导出 `Config`，浏览器 `ctx.configForms` | 当前支持目标 |
+| 0.1.7 – 0.1.x | 同一套 Config/configForms 接缝 | 无需改动 |
+| ≤ 0.1.5 | `ctx.settings.register` + `ctx.settingsScope` | 自动回落，无需配置 |
+
+0.2 改动了三处本插件依赖的应用侧细节，本次已跟进（都验证过「旧写法在 0.2 上静默失效」）：
+
+- **回合状态标签**（“Deep diving…”）从 `@deepseek-ai/dsh-client-ui-conversation` 的**渐变文字**搬到 `@deepseek-ai/dsh-client-ui-chat` 的**遮罩扫光文字**，不再有 `turnStatus` 类名，着色改由 `--dsw-alias-label-deep-diving` / `-shimmer` 两个令牌承担，所以旧规则已删除、改在 `theme.overrideTokens` 层换色（实测：留着旧规则时该令牌仍是应用自带值，标签完全没有主题色）；
+- **右侧栏**列名由 `_detailsCol` 改为 `_rightbarCol`，且不透明底色移到列元素本身——等高线图层在右侧栏打开时不会再被整块盖住；
+- **插件卡片展示文案**改由 `locale/<语言>.json` 的 `meta.title` / `meta.description` 提供；`package.json` 的 `dsh.client.inject` 也不再列 0.2 已删除的 `@deepseek-ai/dsh-client-runtime` 与 `@deepseek-ai/dsh-client-ui-slots`（改为列出 0.2 真正的提供方）。
+
 ## 安装
 
 ```bash
@@ -29,7 +43,7 @@ dsh plugin --profile web rm dsh-theme-endfield
 - 雷霆大字及入场动画；
 - 可选音频通知：启动音、任务开始/结束音、需要回应时提示，音量与自定义音效目录可调（默认关闭，详见 [docs/audio-notifications.md](docs/audio-notifications.md)）。
 
-所有设置由 DSH 自己的设置服务持久化，与页面 origin/端口无关：在 **DSH 0.1.7-rc.1** 上，Host `index.js` 导出一份字段全部 `.volatile()` 的 schemastery `Config`（命名空间 = 本插件 profile entry id `theme-endfield`），浏览器 `client.js` 通过 `ctx.configForms` 读写并订阅，值随 `<profile>/cordis.patch.yml` 落盘；在**旧版 DSH** 上则回落到 `ctx.settings.register('dsh-theme-endfield', schema)` + `ctx.settingsScope`（`<dshHome>/settings.yaml`）。两代都与页面 origin 无关，因此 DSH web 与 DSH Desktop 都能正确保存并在重启/换端口后恢复，不再使用会被 Desktop 随机端口清空的 `localStorage`。详见 [docs/features.md](docs/features.md) 与 [docs/engineering-notes.md](docs/engineering-notes.md)；0.1.7 升级后旧设置需要在设置页重设一次（`settings.yaml` 已被 DSH 废弃，见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](docs/engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)）。设置文案支持中英文；动态等高线尊重系统「减少动态效果」，动画帧率和速度可独立调整。
+所有设置由 DSH 自己的设置服务持久化，与页面 origin/端口无关：在 **DSH 0.2.0-rc.2 / 0.1.7-rc.1 及以后**，Host `index.js` 导出一份字段全部 `.volatile()` 的 schemastery `Config`（命名空间 = 本插件 profile entry id `theme-endfield`），浏览器 `client.js` 通过 `ctx.configForms` 读写并订阅，值随 `<profile>/cordis.patch.yml` 落盘；在**更旧的 DSH（≤ 0.1.5）** 上则回落到 `ctx.settings.register('dsh-theme-endfield', schema)` + `ctx.settingsScope`（`<dshHome>/settings.yaml`）。两代都与页面 origin 无关，因此 DSH web 与 DSH Desktop 都能正确保存并在重启/换端口后恢复，不再使用会被 Desktop 随机端口清空的 `localStorage`。详见 [docs/features.md](docs/features.md) 与 [docs/engineering-notes.md](docs/engineering-notes.md)；0.1.7 升级后旧设置需要在设置页重设一次（`settings.yaml` 已被 DSH 废弃，见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](docs/engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)）。设置文案支持中英文；动态等高线尊重系统「减少动态效果」，动画帧率和速度可独立调整。
 
 **如果开关总是「刷新后复位」**：先看 Host 侧有没有这份 `Config`（`Config.listConfigs` 对该 entry 报 `absent` 就是没有）。没有 Config 时 DSH 不投影任何表单，Host `apply()` 会打一行 warn 并在 profile 目录留下报告文件 `theme-endfield-diagnostic.json`（`Config` 构建成功时会自动删除它；报告里的 `schemaMode` / `loaded` / `loadError` 会写明走了哪条解析路径、以及某个副本是否「解析得到却加载失败」）——排查与判据见 [docs/testing.md](docs/testing.md#设置页)。另外注意：**改 Host 半（`index.js`）必须整进程重启 DSH**，刷新页面只重载 `client.js`。
 
@@ -59,6 +73,7 @@ npm test
 client.js          Client 侧主题实现
 index.js           Host 侧：导出 volatile Config，声明设置命名空间
 lib/               音频通知：槽位定义、WAV 合成与播放运行时
+locale/            插件卡片的展示文案（meta.title / meta.description）
 sounds/            生成的通知音（npm run sound:build 重新生成）
 cordis.patch.yml   Bundle 注入配置
 check.js           样式表静态校验

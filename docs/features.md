@@ -8,7 +8,7 @@
 
 历史内存风格：这些开关最初存浏览器 `localStorage`。由于浏览器存储按「协议 + 主机 + 端口」的 origin 隔离，而 DSH Desktop 每次启动都在 127.0.0.1 绑定一个**随机临时端口**，端口一变 origin 就变，上次保存的设置永远读不到，表现为「重启后恢复默认」。已改用 DSH 官方的用户设置命名空间：
 
-- **DSH 0.1.7-rc.1（当前）**：**Host 端（index.js）** 导出 schemastery `Config`，27 个字段全部 `.volatile()`——0.1.7 只把 volatile 字段投影成可编辑表单；命名空间就是本插件在 `cordis.patch.yml` 里那一行的 profile entry id（`theme-endfield`）。**浏览器端（client.js）** 用 `ctx.configForms.get('theme-endfield')` 读/写/订阅，值由 DSH 的设置服务写进 profile patch `<profile>/cordis.patch.yml`。另外 Host 会调用 `ctx.settings.configure({ auto: false }, ctx.fiber)` 告诉 DSH 本插件自带设置页，不要再自动生成一份。
+- **DSH 0.2.0-rc.2 / 0.1.7-rc.1 及以后（当前）**：**Host 端（index.js）** 导出 schemastery `Config`，27 个字段全部 `.volatile()`——这两代都只把 volatile 字段投影成可编辑表单；命名空间就是本插件在 `cordis.patch.yml` 里那一行的 profile entry id（`theme-endfield`）。**浏览器端（client.js）** 用 `ctx.configForms.get('theme-endfield')` 读/写/订阅，值由 DSH 的设置服务写进 profile patch `<profile>/cordis.patch.yml`。另外 Host 会调用 `ctx.settings.configure({ auto: false }, ctx.fiber)` 告诉 DSH 本插件自带设置页，不要再自动生成一份。0.2 的这套接缝与 0.1.7 完全相同，本插件侧不需要改动；0.2 真正改掉的是三个**应用侧**细节（回合状态标签的类名与着色机制、右侧栏列名、插件卡片文案来源），见 [engineering-notes.md § DSH 0.2.0-rc.2](engineering-notes.md#dsh-020-rc2-上失效的三处应用侧钩子v116-已跟进)。
 - **≤ 0.1.5-rc.2（旧宿主，仍兼容）**：Host 通过 `ctx.settings.register('dsh-theme-endfield', schema)` 声明命名空间，由 `@deepseek-ai/dsh-settings-file` 落到 `<dshHome>/settings.yaml`；浏览器端用 `ctx.settingsScope` 的 `bind({ namespace, decode })` 读写。client 在找不到 `configForms` 时自动回落到这条路径。
 
 两代的落盘位置都由 DSH 决定（`$DSH_HOME` 或 `~/.dsh/...`），与浏览器 origin/端口无关，因此在 **dsh web（浏览器、固定/默认端口）** 和 **DSH Desktop（随机临时端口）** 两种运行方式下设置都能正确持久化——它们跑的都是 127.0.0.1 loopback 页面，DSH 会把连接解析为 `host` 持久化模式。
@@ -89,7 +89,7 @@
 
 算法细节与实测数据见 [engineering-notes.md § 等高线](engineering-notes.md#等高线背景).
 
-**图层挂在应用外框内部**，`inset:0; z-index:0`，落在「外框底色之上、所有定位子元素之下」。正文永远在图层之上，前景对比度不受影响。挂载期间会把外框、对话列、详情列与侧栏的不透明底色置为透明（`:has()` 守卫使功能关闭时全部规则失效）。
+**图层挂在应用外框内部**，`inset:0; z-index:0`，落在「外框底色之上、所有定位子元素之下」。正文永远在图层之上，前景对比度不受影响。挂载期间会把外框、对话列、右侧栏列（0.1.x 叫详情列）与侧栏的不透明底色置为透明（`:has()` 守卫使功能关闭时全部规则失效）。
 
 **关闭时零逐帧开销**——不是在 rAF 里空转再提前返回，而是整个循环停掉。
 
@@ -217,10 +217,10 @@
 | Cordis / 技能 / 工具 检查面板按钮 | 同上 | 16.50:1 |
 | 附件轮播箭头 | 同上 | 16.50:1 |
 | 亮色模式「移除」按钮 | `#ff3b30` 红字在面板底上 3.16:1 | 5.16:1 |
-| 回合状态标签「Deep diving…」 | 渐变文字仍是品牌蓝 | 两配色四个色标全部达 AA |
+| 回合状态标签「Deep diving…」 | 渐变文字仍是品牌蓝 | 两配色四个色标全部达 AA（0.2 起标签改用遮罩扫光，换色走 `--dsw-alias-label-deep-diving*` 两个令牌，结论不变） |
 | 提问卡片「推荐」徽标 | 前景与背景令牌被映射成同一值，完全不可见 | 16.50:1 |
 | 提问卡片选项编号 | 暗色选中行上黑底黑字，1.25:1 | 11.69:1 |
-| 新建会话页背景光晕 | 写死的 `#6187D8` | 改强调色，按亮度对齐原强度 |
+| 新建会话页背景光晕 | 写死的 `#6187D8` | 改强调色，按亮度对齐原强度（`*_heroGlow` 模块自 0.1.2-rc.1 起已不存在、0.2 仍无，规则保留为自愈钩子） |
 | 会话头部预设徽章（agent preset，如「创造模式」） | 上游把徽章移进 `_headerActions` 插槽的包裹层里，主题的 `>` 选择器失配，退回默认灰胶囊 | 恢复强调色填充 + 黑字，**尺寸沿用上游**（不撑宽） |
 
 这些的成因分析见 [engineering-notes.md § 已修问题归档](engineering-notes.md#已修问题归档)。

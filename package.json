@@ -1,7 +1,7 @@
 {
   "name": "dsh-theme-endfield",
-  "version": "1.1.5",
-  "description": "DeepSeek Harness web theme: the industrial editorial look of the Arknights: Endfield official site \u2014 cream paper, ink text, signal-yellow accents, zero radius. Settings persist through the DSH 0.1.7 volatile Config + configForms transport, with a ctx.settingsScope fallback for older hosts.",
+  "version": "1.1.6",
+  "description": "DeepSeek Harness web theme: the industrial editorial look of the Arknights: Endfield official site \u2014 cream paper, ink text, signal-yellow accents, zero radius. Settings persist through the DSH volatile Config + configForms transport (0.2.0-rc.2 and 0.1.7+), with a ctx.settingsScope fallback for older hosts.",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -52,28 +52,30 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
     "client": {
+      "platform": "web",
+      "immediately": true,
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-slots",
-        "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-theme",
-        "theme"
-      ],
-      "platform": "web"
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-session-controller"
+      ]
     }
   },
   "files": [
     "index.js",
     "client.js",
     "cordis.patch.yml",
+    "locale",
     "README.md",
     "docs",
     "lib",

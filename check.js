@@ -279,13 +279,54 @@ try {
   fail('client.js does not parse: ' + e.message)
 }
 
-/* --- 4. the turn-status label must be recoloured via background-image ---
-   A plain `color:` cannot win against upstream's transparent text fill, so an edit
-   that "fixes" this rule with color: would silently do nothing. */
-if (src.includes("turnStatus")) {
-  const hasBg = /turnStatus[\s\S]{0,400}?background-image:\s*linear-gradient/.test(src)
-  if (hasBg) pass('turn-status label is recoloured through background-image (gradient text)')
-  else fail('turn-status rules found but no background-image gradient — a plain color: cannot recolour gradient text')
+/* --- 4. the turn-status label must be recoloured through its 0.2 tokens ---
+   DSH 0.2 moved the label from @deepseek-ai/dsh-client-ui-conversation
+   (`Md3f7G_turnStatus`, gradient text: background-image + background-clip:text) to
+   @deepseek-ai/dsh-client-ui-chat (`<hash>_running`, masked-sweep text), whose whole
+   rule is
+
+     .<hash>_running {
+       --dsw-alias-label-shimmer: var(--dsw-alias-label-deep-diving-shimmer);
+       color: var(--dsw-alias-label-deep-diving);
+     }
+
+   so a background-image override is now inert and the ONLY lever that reaches the
+   glyphs is that pair of deep-diving tokens. Two invariants have to hold, and both
+   fail silently when broken:
+     1. the override layer must retint BOTH tokens for BOTH schemes, and must do it
+        by referencing the measured --edge-status-* palette variables rather than
+        literals — a literal would freeze one palette and break the 武陵青 flip, and
+        the stops are contrast-critical (light needs #6b5d00 / #3f3600 to clear AA
+        on cream, dark needs #fff500 / #a08a00);
+     2. no dead `[class*='turnStatus']` selector may come back: it can never match on
+        0.2, so a rule that looks like a fix would silently do nothing. */
+const tokenBlock = (name) => {
+  const at = src.indexOf("'" + name + "'")
+  return at < 0 ? null : src.slice(at, at + 260)
+}
+const tokenValueAfter = (block, key) => {
+  if (block === null) return ''
+  const at = block.indexOf(key + ':')
+  if (at < 0) return ''
+  const m = block.slice(at + key.length + 1).match(/^\s*'([^']*)'/)
+  return m === null ? '' : m[1]
+}
+const diving = tokenBlock('--dsw-alias-label-deep-diving')
+const shimmer = tokenBlock('--dsw-alias-label-deep-diving-shimmer')
+const divingOk = tokenValueAfter(diving, 'light') === 'var(--edge-status-light)'
+  && tokenValueAfter(diving, 'dark') === 'var(--edge-status-dark)'
+const shimmerOk = tokenValueAfter(shimmer, 'light') === 'var(--edge-status-light-mid)'
+  && tokenValueAfter(shimmer, 'dark') === 'var(--edge-status-dark-mid)'
+if (divingOk && shimmerOk) {
+  pass('turn-status label is recoloured through the 0.2 deep-diving token pair (both schemes, palette variables)')
+} else {
+  fail('turn-status label is not retinted through --dsw-alias-label-deep-diving / -shimmer for both colour schemes '
+    + 'with the measured --edge-status-* variables — the 0.2 label is masked-sweep text, so nothing else reaches its glyphs')
+}
+if (/\[class\*='turnStatus'\]/.test(src)) {
+  fail("a dead [class*='turnStatus'] selector is present — 0.2 moved that label to _running, so the rule can never match")
+} else {
+  pass('no dead [turnStatus] selector remains (0.2 moved the label to _running)')
 }
 
 console.log('')

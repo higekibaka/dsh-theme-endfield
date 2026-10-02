@@ -71,8 +71,13 @@ const hooks = [
   ["[class$='_root']:has(> [data-endfield-watermark])", 'watermark host isolation'],
   ["[class*='_frame']:has(> [data-endfield-contour]) [class$='_centerCol'] [class$='_root']",
     'contour: conversation column transparency'],
-  ["[class*='_frame']:has(> [data-endfield-contour]) [class$='_detailsCol'] [class$='_root']",
-    'contour: details column transparency'],
+  ["[class*='_frame']:has(> [data-endfield-contour]) [class$='_rightbarCol']",
+    'contour: right column transparency (0.2 rename of _detailsCol)'],
+  // 0.2 moved the turn-status label from dsh-client-ui-conversation to
+  // dsh-client-ui-chat and replaced its gradient text with a masked sweep, so the
+  // recolour now rides these two tokens instead of a class selector.
+  ["'--dsw-alias-label-deep-diving'", 'turn-status resting token (0.2 _running seam)'],
+  ["'--dsw-alias-label-deep-diving-shimmer'", 'turn-status sweep token (0.2 _running seam)'],
   ["[class$='_sidebarCol'] [class*='_sessionRow']", 'sidebar workspace rows'],
   ["[class$='_sidebarCol'] [class*='_folder']", 'light-mode sidebar ink'],
   ["[class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg)", 'agent-preset header chip'],

@@ -12,12 +12,13 @@
 | `client.js`（Web 半） | 是 | 是 |
 | `lib/`（宿主侧通知引擎：`audio.js` / `tone.js` / `slots.js`） | 是 | 是（`index.js` 顶层 `require('./lib/audio.js')`） |
 | `sounds/`（5 个 `.wav` 提示音） | 是 | 是（作为数据由 `lib/audio.js` 读取、拷贝到缓存目录后交给播放器） |
+| `locale/`（`en.json` / `zh.json`：插件卡片展示文案，`{"meta":{"title","description"}}`） | 是 | 否（由 DSH 的插件元信息读取器按 `<包>/locale/<语言>.json` 读取，插件代码不加载） |
 | `cordis.patch.yml` | 是 | 是（挂载入口） |
 | `README.md` / `docs/` / `LICENSE` | 是 | 否（纯文档） |
 | `check.js` / `selftest.js` / `test/` / `.github/` | **否** | **否** |
 
 发布产物由 `package.json` 的 `files` 字段定义（`index.js, client.js, cordis.patch.yml,
-README.md, docs, lib, sounds, LICENSE`，外加 npm 始终包含的 `package.json`）。四个运行时
+locale, README.md, docs, lib, sounds, LICENSE`，外加 npm 始终包含的 `package.json`）。四个运行时
 入口（`index.js`、`client.js`、`lib/`、`cordis.patch.yml`）对 `check.js`、`selftest.js`、
 `test/` **零引用**：它们只能由 `npm run check` / `npm run selftest` / `npm test` 显式启动。
 本文件本身是仓库文档，不进发布产物。

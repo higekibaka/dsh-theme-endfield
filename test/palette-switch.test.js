@@ -61,15 +61,18 @@ fs.writeFileSync(page, `<!doctype html><html><head><meta charset="utf-8"><style>
   .pI_x6G_centerCol{flex-direction:column;min-width:0;display:flex;overflow:hidden}
   .wSkVaW_root{background:var(--dsw-alias-bg-base);flex-direction:column;height:100%;display:flex}
   .area{flex:1 1 auto;padding:30px}
-  /* Upstream's gradient-text turn status, reproduced so the override is measurable. */
-  .Md3f7G_turnStatus{background:linear-gradient(90deg,#101110 0%,#101110 40%,#d3e2ff 50%,#101110 60%,#101110 100%);
-    -webkit-text-fill-color:transparent;background-clip:text;-webkit-background-clip:text;font-size:14px}
+  /* Upstream's turn-status label on the DSH 0.2 shape, reproduced so the recolour is
+     measurable: the label is masked-sweep text whose whole rule reads the two
+     --dsw-alias-label-deep-diving* tokens. The pre-0.2 gradient-text rule this mock
+     used to carry no longer exists upstream, so testing it would test nothing. */
+  .xz4KEq_running{--dsw-alias-label-shimmer:var(--dsw-alias-label-deep-diving-shimmer);
+    color:var(--dsw-alias-label-deep-diving);font-size:14px}
 </style></head><body><div id="root">
   <div class="pI_x6G_frame">
     <div class="pI_x6G_sidebarCol">sidebar</div>
     <div class="pI_x6G_centerCol"><div class="wSkVaW_root"><div class="area">
       <table><tbody><tr id="row"><td id="cell">cell</td></tr></tbody></table>
-      <span class="Md3f7G_turnStatus" id="status">Deep diving...</span>
+      <span class="xz4KEq_running" id="status">Deep diving...</span>
       <button id="newSession" class="x_newSession">new</button>
     </div></div></div>
   </div>
@@ -144,7 +147,7 @@ setScheme('dark')
 const brandDarkBefore=v('--dsw-alias-brand-primary')
 setScheme('light')
 const washBefore=v('--dsw-alias-interactive-bg-hover')
-const glowBefore=getComputedStyle(document.getElementById('status')).backgroundImage
+const statusBefore=getComputedStyle(document.getElementById('status')).color
 const yellowCanvas=canvasHash()
 R('等高线画布已上色', yellowCanvas && yellowCanvas.n>0, JSON.stringify(yellowCanvas))
 
@@ -178,9 +181,14 @@ setTimeout(()=>{
     washAfter.includes('20')&&washAfter.includes('208')&&washAfter!==washBefore,
     'before='+washBefore+' after='+washAfter)
 
-  const glowAfter=getComputedStyle(document.getElementById('status')).backgroundImage
-  R('回合状态渐变文字换色', glowAfter!==glowBefore && /0,\\s*106,\\s*106|006a6a/i.test(glowAfter),
-    glowAfter.slice(0,90))
+  /* The 0.2 turn-status label reads --dsw-alias-label-deep-diving, which the theme
+     writes as var(--edge-status-light) / var(--edge-status-dark). Same indirection as
+     the brand token above, so the palette flip must re-resolve it with no JS: the
+     resting glyph colour has to become the 武陵青 light stop #006a6a = rgb(0,106,106). */
+  const statusAfter=getComputedStyle(document.getElementById('status')).color
+  R('回合状态文字换色（0.2 deep-diving 令牌）',
+    statusAfter!==statusBefore && /0,\\s*106,\\s*106|#006a6a/i.test(statusAfter),
+    'before='+statusBefore+' after='+statusAfter)
 
   /* ---- 5. the canvas: JS-painted, so it must be redrawn ---- */
   const cyanCanvas=canvasHash()
